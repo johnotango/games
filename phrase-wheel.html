@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Phrase Wheel</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0a0a1a;min-height:100vh;font-family:'Nunito',sans-serif;-webkit-tap-highlight-color:transparent}
+  .app{min-height:100vh;background:radial-gradient(ellipse at 20% 50%,#1a0a3a 0%,#0a0a1a 60%),radial-gradient(ellipse at 80% 20%,#0a1a3a 0%,transparent 50%);display:flex;flex-direction:column;align-items:center;padding:16px;padding-bottom:40px}
+  .header{text-align:center;margin-bottom:20px;width:100%}
+  .title{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,10vw,56px);letter-spacing:4px;background:linear-gradient(135deg,#ffd700 0%,#ff6b35 50%,#ff1493 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 20px rgba(255,215,0,0.4));line-height:1;margin-bottom:4px}
+  .subtitle{color:rgba(255,255,255,0.4);font-size:11px;letter-spacing:3px;text-transform:uppercase}
+  /* SETUP */
+  .setup-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,215,0,0.2);border-radius:20px;padding:28px 24px;width:100%;max-width:420px;backdrop-filter:blur(10px)}
+  .setup-label{color:#ffd700;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;display:block}
+  .setup-select,.setup-input,.setup-textarea{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-family:'Nunito',sans-serif;font-size:16px;padding:12px 16px;margin-bottom:20px;outline:none;transition:border-color 0.2s;-webkit-appearance:none;appearance:none}
+  .setup-select:focus,.setup-input:focus,.setup-textarea:focus{border-color:#ffd700}
+  .setup-textarea{resize:none;height:80px;text-transform:uppercase;letter-spacing:2px;font-weight:700}
+  .setup-hint{color:rgba(255,255,255,0.35);font-size:12px;margin-top:-16px;margin-bottom:20px}
+  .btn-start{width:100%;padding:16px;border-radius:12px;border:none;background:linear-gradient(135deg,#ffd700,#ff6b35);color:#0a0a1a;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;cursor:pointer;filter:drop-shadow(0 4px 12px rgba(255,107,53,0.5))}
+  .btn-start:active{transform:scale(0.97)}
+  .btn-start:disabled{opacity:0.4;cursor:not-allowed}
+  /* GAME */
+  .game-wrap{width:100%;max-width:480px;display:flex;flex-direction:column;align-items:center;gap:16px}
+  .category-badge{background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.3);border-radius:50px;padding:6px 18px;color:#ffd700;font-size:12px;letter-spacing:2px;text-transform:uppercase}
+  .lives-row{display:flex;align-items:center;gap:10px;width:100%;justify-content:space-between}
+  .lives-dots{display:flex;gap:6px}
+  .life-dot{width:14px;height:14px;border-radius:50%;background:#ff1493;box-shadow:0 0 8px rgba(255,20,147,0.7);transition:background 0.3s,box-shadow 0.3s}
+  .life-dot.lost{background:rgba(255,255,255,0.1);box-shadow:none}
+  .wrong-letters{color:rgba(255,100,100,0.8);font-size:13px;letter-spacing:2px;font-weight:700;text-align:right;max-width:200px;word-break:break-all}
+  .board{width:100%;background:rgba(0,0,50,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px 12px;min-height:100px;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .phrase-row{display:flex;flex-wrap:wrap;justify-content:center;gap:5px}
+  .word-group{display:flex;gap:5px;margin:2px 4px}
+  .letter-tile{width:28px;height:36px;background:rgba(255,255,255,0.07);border-bottom:2px solid rgba(255,215,0,0.5);border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:20px;color:#ffd700;letter-spacing:1px;transition:all 0.3s}
+  .letter-tile.revealed{background:rgba(255,215,0,0.12);border-bottom-color:#ffd700;animation:pop 0.3s ease}
+  .letter-tile.punct{border-bottom:none;background:transparent;color:rgba(255,255,255,0.5);font-size:18px}
+  @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+  /* KEYBOARD */
+  .keyboard{width:100%;display:flex;flex-direction:column;gap:6px;align-items:center}
+  .key-row{display:flex;gap:5px;justify-content:center}
+  .key-btn{width:32px;height:40px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.08);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:17px;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center}
+  .key-btn:active:not(:disabled){transform:scale(0.92)}
+  .key-btn.correct{background:rgba(50,200,100,0.3);border-color:rgba(50,200,100,0.6);color:#50c864}
+  .key-btn.wrong{background:rgba(255,50,50,0.15);border-color:rgba(255,50,50,0.3);color:rgba(255,80,80,0.5);cursor:not-allowed}
+  .key-btn:disabled{cursor:not-allowed}
+  .btn-quit{padding:8px 18px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.45);font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:4px}
+  /* RESULT */
+  .result-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:100;padding:24px;animation:fadeIn 0.4s ease}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .result-emoji{font-size:72px;animation:bounce 0.5s ease}
+  @keyframes bounce{0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)}}
+  .result-title{font-family:'Bebas Neue',sans-serif;font-size:52px;letter-spacing:4px;text-align:center;line-height:1}
+  .result-title.win{background:linear-gradient(135deg,#ffd700,#ff6b35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .result-title.lose{color:#ff4466}
+  .result-phrase{color:rgba(255,255,255,0.7);font-size:16px;font-weight:700;letter-spacing:3px;text-align:center;text-transform:uppercase;background:rgba(255,255,255,0.05);border-radius:10px;padding:14px 20px;max-width:340px}
+  .result-btn-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .btn-again{padding:14px 28px;border-radius:12px;border:none;background:linear-gradient(135deg,#ffd700,#ff6b35);color:#0a0a1a;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;filter:drop-shadow(0 4px 12px rgba(255,107,53,0.5))}
+  .btn-new{padding:14px 28px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:rgba(255,255,255,0.7);font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer}
+  select option{background:#1a1a2e}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <div class="header">
+    <div class="title">Phrase Wheel</div>
+    <div class="subtitle">Family Word Game</div>
+  </div>
+
+  <!-- SETUP SCREEN -->
+  <div class="setup-card" id="screen-setup">
+    <label class="setup-label">Category</label>
+    <select class="setup-select" id="category-select">
+      <option>Person</option>
+      <option>Place</option>
+      <option selected>Thing</option>
+      <option>Phrase</option>
+      <option>Movie / TV</option>
+      <option>Song</option>
+      <option>Animal</option>
+      <option>Food</option>
+      <option>Surprise! 🎉</option>
+    </select>
+    <label class="setup-label">Secret Phrase</label>
+    <textarea class="setup-textarea" id="phrase-input" placeholder="TYPE YOUR PHRASE HERE..." autocapitalize="characters" autocorrect="off" spellcheck="false"></textarea>
+    <div class="setup-hint">Hand the phone to your daughter when ready!</div>
+    <button class="btn-start" id="btn-start" disabled onclick="startGame()">Start Game →</button>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div class="game-wrap hidden" id="screen-game">
+    <div class="category-badge" id="cat-badge">Thing</div>
+    <div class="lives-row">
+      <div class="lives-dots" id="lives-dots"></div>
+      <div class="wrong-letters" id="wrong-letters">No wrong guesses yet</div>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="keyboard" id="keyboard"></div>
+    <button class="btn-quit" onclick="resetToSetup()">↩ New Phrase</button>
+  </div>
+
+  <!-- RESULT OVERLAY -->
+  <div class="result-overlay hidden" id="screen-result">
+    <div class="result-emoji" id="result-emoji">🎉</div>
+    <div class="result-title" id="result-title">You Got It!</div>
+    <div class="result-phrase" id="result-phrase"></div>
+    <div class="result-btn-row">
+      <button class="btn-again" onclick="playAgain()">Play Again</button>
+      <button class="btn-new" onclick="resetToSetup()">New Phrase</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const MAX_WRONG = 7;
+const ROWS = [
+  ['Q','W','E','R','T','Y','U','I','O','P'],
+  ['A','S','D','F','G','H','J','K','L'],
+  ['Z','X','C','V','B','N','M']
+];
+
+let phrase = '';
+let guessed = new Set();
+let wrongCount = 0;
+
+// Enable start button when phrase typed
+document.getElementById('phrase-input').addEventListener('input', function(){
+  document.getElementById('btn-start').disabled = !this.value.trim();
+});
+
+function startGame() {
+  const raw = document.getElementById('phrase-input').value.trim().toUpperCase().replace(/[^A-Z0-9 '&!?-]/g,'');
+  if (!raw) return;
+  phrase = raw;
+  guessed = new Set();
+  wrongCount = 0;
+
+  document.getElementById('cat-badge').textContent = document.getElementById('category-select').value;
+
+  buildBoard();
+  buildKeyboard();
+  updateLives();
+  updateWrongLetters();
+
+  show('screen-game');
+  hide('screen-setup');
+  hide('screen-result');
+}
+
+function buildBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  const words = phrase.split(' ');
+  const row = document.createElement('div');
+  row.className = 'phrase-row';
+
+  words.forEach(word => {
+    const wg = document.createElement('div');
+    wg.className = 'word-group';
+    [...word].forEach(ch => {
+      const tile = document.createElement('div');
+      const isLetter = /[A-Z0-9]/.test(ch);
+      tile.className = isLetter ? 'letter-tile' : 'letter-tile punct';
+      tile.dataset.char = ch;
+      if (!isLetter) tile.textContent = ch;
+      wg.appendChild(tile);
+    });
+    row.appendChild(wg);
+  });
+  board.appendChild(row);
+}
+
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  ROWS.forEach(row => {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'key-row';
+    row.forEach(letter => {
+      const btn = document.createElement('button');
+      btn.className = 'key-btn';
+      btn.textContent = letter;
+      btn.id = 'key-' + letter;
+      btn.onclick = () => guess(letter);
+      rowDiv.appendChild(btn);
+    });
+    kb.appendChild(rowDiv);
+  });
+}
+
+function guess(letter) {
+  if (guessed.has(letter)) return;
+  guessed.add(letter);
+
+  const inPhrase = phrase.includes(letter);
+  if (!inPhrase) wrongCount++;
+
+  // Update tiles
+  document.querySelectorAll('.letter-tile[data-char="' + letter + '"]').forEach(t => {
+    t.textContent = letter;
+    t.classList.add('revealed');
+  });
+
+  // Update key
+  const btn = document.getElementById('key-' + letter);
+  if (btn) {
+    btn.classList.add(inPhrase ? 'correct' : 'wrong');
+    btn.disabled = true;
+  }
+
+  updateLives();
+  updateWrongLetters();
+  checkEnd();
+}
+
+function updateLives() {
+  const dots = document.getElementById('lives-dots');
+  dots.innerHTML = '';
+  for (let i = 0; i < MAX_WRONG; i++) {
+    const d = document.createElement('div');
+    d.className = 'life-dot' + (i < wrongCount ? ' lost' : '');
+    dots.appendChild(d);
+  }
+}
+
+function updateWrongLetters() {
+  const wl = [...guessed].filter(l => !phrase.includes(l));
+  const el = document.getElementById('wrong-letters');
+  el.textContent = wl.length ? wl.join('  ') : 'No wrong guesses yet';
+}
+
+function checkEnd() {
+  const letters = phrase.replace(/[^A-Z0-9]/g,'');
+  const won = [...letters].every(l => guessed.has(l));
+  const lost = wrongCount >= MAX_WRONG;
+  if (won || lost) showResult(won);
+}
+
+function showResult(won) {
+  document.getElementById('result-emoji').textContent = won ? '🎉' : '😢';
+  const title = document.getElementById('result-title');
+  title.textContent = won ? 'You Got It!' : 'Game Over';
+  title.className = 'result-title ' + (won ? 'win' : 'lose');
+  document.getElementById('result-phrase').textContent = phrase;
+  show('screen-result');
+}
+
+function playAgain() {
+  guessed = new Set();
+  wrongCount = 0;
+  buildBoard();
+  buildKeyboard();
+  updateLives();
+  updateWrongLetters();
+  hide('screen-result');
+}
+
+function resetToSetup() {
+  document.getElementById('phrase-input').value = '';
+  document.getElementById('btn-start').disabled = true;
+  hide('screen-game');
+  hide('screen-result');
+  show('screen-setup');
+}
+
+function show(id){ document.getElementById(id).classList.remove('hidden'); }
+function hide(id){ document.getElementById(id).classList.add('hidden'); }
+</script>
+</body>
+</html>
