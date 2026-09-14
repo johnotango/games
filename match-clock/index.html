@@ -1,0 +1,509 @@
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Match Clock</title>
+<meta name="theme-color" content="#0C1116">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Match Clock">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<style>
+  :root{
+    --night:#0C1116;
+    --panel:#141C24;
+    --chalk:#F2F5F0;
+    --line:rgba(242,245,240,.13);
+    --dim:rgba(242,245,240,.52);
+    --amber:#FFB000;
+    --display:'Roboto Condensed','Arial Narrow','Helvetica Neue Condensed',system-ui,sans-serif;
+    --body:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{
+    background:var(--night);color:var(--chalk);font-family:var(--body);
+    overscroll-behavior:none;user-select:none;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  .app{
+    display:flex;flex-direction:column;
+    min-height:100dvh;max-width:560px;margin:0 auto;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+
+  /* ── top bar ─────────────────────────── */
+  .bar{flex:none;display:flex;align-items:baseline;justify-content:space-between;padding:12px 18px 0}
+  .phase{font-family:var(--display);font-size:18px;letter-spacing:.02em;color:var(--dim)}
+  .phase[data-live="1"]{color:var(--chalk)}
+  .setup{font-size:14px;color:var(--dim);padding:4px 2px}
+
+  /* ── clock ───────────────────────────── */
+  .clockwrap{flex:none;display:flex;flex-direction:column;align-items:center;padding:4px 0 8px}
+  .clock{
+    display:flex;align-items:baseline;justify-content:center;gap:8px;
+    font-family:var(--display);font-variant-numeric:tabular-nums;padding:0 18px;
+  }
+  .clock b{font-size:clamp(42px,13vw,58px);font-weight:600;line-height:1.05;letter-spacing:-.01em}
+  .clock .extra{font-size:clamp(24px,7vw,30px);font-weight:600;color:var(--amber);line-height:1}
+  .clock.stopped b{color:var(--dim)}
+  .clock:active{opacity:.7}
+  .hint{font-size:12px;color:var(--dim);margin-top:3px}
+  .hint[hidden]{display:none}
+
+  /* ── the pitch: two tappable halves ──── */
+  .pitch{
+    flex:1 1 auto;min-height:230px;position:relative;display:flex;
+    overflow:hidden;border-block:1px solid var(--line);
+  }
+  .circle{
+    position:absolute;left:50%;top:50%;translate:-50% -50%;
+    width:min(52vw,200px);aspect-ratio:1;border:1px solid var(--line);border-radius:50%;
+    pointer-events:none;
+  }
+  .side{
+    position:relative;flex:1 1 0;min-width:0;overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    padding:10px 6px 30px;transition:background .25s ease;
+  }
+  .side+.side{border-left:1px solid var(--line)}
+  .side.flash{background:color-mix(in srgb,var(--kit) 26%,transparent);transition:background .06s}
+  .name{
+    font-family:var(--display);font-size:18px;font-weight:600;letter-spacing:.02em;
+    padding:2px 8px;border-radius:4px;max-width:100%;text-align:center;
+    overflow:hidden;white-space:nowrap;
+  }
+  .name:focus{outline:none;background:rgba(242,245,240,.09)}
+  .score{
+    font-family:var(--display);font-variant-numeric:tabular-nums;
+    font-size:clamp(58px,21vw,124px);font-weight:700;line-height:1;
+    color:var(--kit);text-shadow:0 0 30px color-mix(in srgb,var(--kit) 28%,transparent);
+  }
+  .score.bump{animation:bump .34s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes bump{0%{scale:1}40%{scale:1.14}100%{scale:1}}
+  .kit{width:24px;height:4px;border-radius:3px;background:var(--kit);opacity:.9}
+  .undo{
+    font-family:var(--display);font-size:20px;line-height:1;color:var(--dim);
+    padding:5px 15px;border:1px solid var(--line);border-radius:20px;
+  }
+  .tip{
+    position:absolute;bottom:8px;left:0;right:0;text-align:center;
+    font-size:12px;color:var(--dim);pointer-events:none;transition:opacity .3s;
+  }
+
+  /* ── controls ────────────────────────── */
+  .controls{flex:none;display:flex;gap:10px;padding:12px 18px 8px}
+  .primary{
+    flex:1;background:var(--amber);color:#101418;font-family:var(--display);
+    font-size:21px;font-weight:700;letter-spacing:.02em;padding:14px;border-radius:10px;
+  }
+  .primary:active{scale:.985}
+  .secondary{
+    font-family:var(--display);font-size:19px;font-weight:600;
+    padding:14px 18px;border:1px solid var(--line);border-radius:10px;
+  }
+  .secondary[hidden]{display:none}
+
+  /* ── log ─────────────────────────────── */
+  .log{flex:none;max-height:26vh;overflow-y:auto;padding:0 18px 14px;-webkit-overflow-scrolling:touch}
+  .entry{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line)}
+  .min{font-family:var(--display);font-variant-numeric:tabular-nums;font-size:17px;color:var(--amber);min-width:52px}
+  .who{font-size:15px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--kit);flex:none}
+  .rm{color:var(--dim);font-size:20px;line-height:1;padding:2px 8px}
+
+  /* ── sheets ──────────────────────────── */
+  .sheet{position:fixed;inset:0;background:rgba(6,9,12,.74);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+  .sheet[hidden]{display:none}
+  .card{
+    width:100%;max-width:560px;max-height:94dvh;overflow-y:auto;
+    background:var(--panel);border-radius:16px 16px 0 0;border-top:1px solid var(--line);
+    padding:18px 18px calc(20px + env(safe-area-inset-bottom));
+  }
+  .card h2{font-family:var(--display);font-size:21px;font-weight:600;margin:0 0 4px}
+  .card p{font-size:14px;color:var(--dim);margin:0 0 16px}
+  .field{font-size:13px;color:var(--dim);margin:0 0 8px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .chip{font-family:var(--display);font-size:18px;padding:9px 16px;border:1px solid var(--line);border-radius:8px;color:var(--dim)}
+  .chip[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+  .swatches{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+  .swatches .label{font-size:14px;color:var(--dim);min-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .swrow{display:flex;gap:10px}
+  .sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent}
+  .sw[aria-pressed="true"]{border-color:var(--chalk)}
+  .sheet-actions{display:flex;gap:10px;margin-top:18px}
+  .sheet-actions button{flex:1;padding:14px;border-radius:10px;font-family:var(--display);font-size:19px}
+  .danger{border:1px solid rgba(215,38,61,.55);color:#FF7A85}
+  .neutral{border:1px solid var(--line);color:var(--dim)}
+  .close{background:var(--chalk);color:#101418;font-weight:700}
+
+  /* ── keypad ──────────────────────────── */
+  .readout{
+    font-family:var(--display);font-variant-numeric:tabular-nums;
+    font-size:clamp(46px,15vw,60px);font-weight:600;text-align:center;
+    line-height:1.1;padding:2px 0 4px;
+  }
+  .readout.fresh{color:var(--dim)}
+  .readout small{font-family:var(--body);font-size:13px;font-weight:400;color:var(--dim);display:block;margin-top:-2px}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .key{
+    font-family:var(--display);font-size:26px;font-weight:600;padding:13px 0;
+    border:1px solid var(--line);border-radius:10px;
+  }
+  .key:active{background:rgba(242,245,240,.09)}
+  .key.alt{font-size:17px;color:var(--dim)}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="app">
+  <header class="bar">
+    <span class="phase" id="phase">Before kick off</span>
+    <button class="setup" id="setupBtn">Match setup</button>
+  </header>
+
+  <div class="clockwrap">
+    <button class="clock" id="clock" aria-label="Set the match clock"><b id="clockMain">00:00</b><span class="extra" id="clockExtra"></span></button>
+    <span class="hint" id="clockHint">Tap the clock to set it</span>
+  </div>
+
+  <div class="pitch">
+    <div class="circle"></div>
+    <button class="side" id="side0" data-team="0">
+      <span class="kit"></span>
+      <span class="name" id="name0" contenteditable="plaintext-only" spellcheck="false" role="textbox" aria-label="Home team name">Home</span>
+      <span class="score" id="score0" aria-live="polite">0</span>
+      <span class="undo" data-undo="0" role="button" aria-label="Remove a goal from home">&minus;</span>
+    </button>
+    <button class="side" id="side1" data-team="1">
+      <span class="kit"></span>
+      <span class="name" id="name1" contenteditable="plaintext-only" spellcheck="false" role="textbox" aria-label="Away team name">Away</span>
+      <span class="score" id="score1" aria-live="polite">0</span>
+      <span class="undo" data-undo="1" role="button" aria-label="Remove a goal from away">&minus;</span>
+    </button>
+    <span class="tip" id="tip">Tap a side to add a goal</span>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="primary">Kick off</button>
+    <button class="secondary" id="secondary" hidden>End half</button>
+  </div>
+
+  <div class="log" id="log"></div>
+</div>
+
+<div class="sheet" id="timeSheet" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-label="Set the clock">
+    <h2>Set the clock</h2>
+    <p>Type the time the game is actually at.</p>
+
+    <div class="chips" id="halfChips"></div>
+
+    <div class="readout" id="readout">00:00<small id="readNote">minutes : seconds</small></div>
+
+    <div class="pad" id="pad">
+      <button class="key" data-d="1">1</button>
+      <button class="key" data-d="2">2</button>
+      <button class="key" data-d="3">3</button>
+      <button class="key" data-d="4">4</button>
+      <button class="key" data-d="5">5</button>
+      <button class="key" data-d="6">6</button>
+      <button class="key" data-d="7">7</button>
+      <button class="key" data-d="8">8</button>
+      <button class="key" data-d="9">9</button>
+      <button class="key alt" data-act="clear">Clear</button>
+      <button class="key" data-d="0">0</button>
+      <button class="key alt" data-act="back" aria-label="Backspace">&#9003;</button>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="neutral" id="timeCancel">Cancel</button>
+      <button class="close" id="timeApply">Set clock</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-label="Match setup">
+    <h2>Match setup</h2>
+    <p>Changes apply to the running match.</p>
+
+    <div class="field">Minutes per half</div>
+    <div class="chips" id="lenChips"></div>
+
+    <div class="field">Kit colours</div>
+    <div class="swatches"><span class="label" id="swLabel0">Home</span><span class="swrow" id="sw0"></span></div>
+    <div class="swatches"><span class="label" id="swLabel1">Away</span><span class="swrow" id="sw1"></span></div>
+
+    <div class="sheet-actions">
+      <button class="danger" id="resetBtn">Reset match</button>
+      <button class="close" id="closeBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PALETTE = ['#D7263D','#2E6BE6','#F2F5F0','#18B36B','#FFC93C','#8E4EC6','#FF7A2F','#7C8794'];
+const KEY = 'match:current';
+const $ = id => document.getElementById(id);
+
+let S = {
+  teams:[{name:'Home',color:PALETTE[0],score:0},{name:'Away',color:PALETTE[1],score:0}],
+  phase:'pre', halfLength:45, running:false, elapsed:0, startedAt:null, ticked:false, events:[]
+};
+
+/* ── time helpers ─────────────────────── */
+const periodMs = () => S.elapsed + (S.running && S.startedAt ? Date.now() - S.startedAt : 0);
+const baseSec  = () => (S.phase === 'h2' || S.phase === 'ft') ? S.halfLength * 60 : 0;
+const shownSec = () => S.phase === 'pre' ? 0 : baseSec() + Math.floor(periodMs() / 1000);
+const regEnd   = () => ((S.phase === 'h2' || S.phase === 'ft') ? 2 : 1) * S.halfLength * 60;
+const fmt = s => String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+
+function minuteLabel(){
+  if (S.phase === 'pre') return '--';
+  if (S.phase === 'ht')  return 'HT';
+  const s = shownSec(), end = regEnd();
+  return s > end ? (end/60) + '+' + (Math.floor((s-end)/60)+1) + "'" : (Math.floor(s/60)+1) + "'";
+}
+
+/* ── rendering ────────────────────────── */
+const PHASE_TEXT = {pre:'Before kick off',h1:'First half',ht:'Half time',h2:'Second half',ft:'Full time'};
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function drawClock(){
+  const s = shownSec(), end = regEnd();
+  $('clockMain').textContent = s > end ? fmt(end) : fmt(s);
+  $('clockExtra').textContent = s > end ? '+' + fmt(s - end) : '';
+  $('clock').classList.toggle('stopped', !S.running);
+}
+
+function drawLog(){
+  $('log').innerHTML = S.events.map((e,i) =>
+    '<div class="entry" style="--kit:' + S.teams[e.team].color + '">' +
+      '<span class="min">' + e.min + '</span>' +
+      '<span class="dot"></span>' +
+      '<span class="who">' + esc(S.teams[e.team].name) + '</span>' +
+      '<button class="rm" data-rm="' + i + '" aria-label="Delete this goal">&times;</button>' +
+    '</div>').reverse().join('');
+}
+
+function draw(){
+  S.teams.forEach((t,i) => {
+    $('side'+i).style.setProperty('--kit', t.color);
+    $('score'+i).textContent = t.score;
+    if ($('name'+i) !== document.activeElement) $('name'+i).textContent = t.name;
+    $('swLabel'+i).textContent = t.name;
+  });
+  $('phase').textContent = PHASE_TEXT[S.phase];
+  $('phase').dataset.live = S.running ? '1' : '0';
+
+  const p = $('primary'), sec = $('secondary');
+  if (S.phase === 'pre'){ p.textContent = 'Kick off'; sec.hidden = true; }
+  else if (S.phase === 'ht'){ p.textContent = 'Start second half'; sec.hidden = true; }
+  else if (S.phase === 'ft'){ p.textContent = 'New match'; sec.hidden = true; }
+  else {
+    p.textContent = S.running ? 'Pause' : (S.ticked ? 'Resume' : 'Start clock');
+    sec.hidden = false;
+    sec.textContent = S.phase === 'h1' ? 'End half' : 'End match';
+  }
+  $('clockHint').hidden = S.running;
+  $('tip').style.opacity = S.events.length ? 0 : 1;
+  drawClock(); drawLog();
+}
+
+/* ── actions ──────────────────────────── */
+function goal(i){
+  S.teams[i].score++;
+  S.events.push({team:i, min:minuteLabel(), at:Date.now()});
+  const el = $('score'+i), side = $('side'+i);
+  el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+  side.classList.add('flash'); setTimeout(() => side.classList.remove('flash'), 260);
+  if (navigator.vibrate) navigator.vibrate(18);
+  draw(); save();
+}
+
+function removeLast(i){
+  if (!S.teams[i].score) return;
+  S.teams[i].score--;
+  for (let k = S.events.length - 1; k >= 0; k--){
+    if (S.events[k].team === i){ S.events.splice(k,1); break; }
+  }
+  draw(); save();
+}
+
+function startClock(){ if (!S.running){ S.running = true; S.ticked = true; S.startedAt = Date.now(); } }
+function stopClock(){ if (S.running){ S.elapsed = periodMs(); S.running = false; S.startedAt = null; } }
+
+function primaryAction(){
+  if (S.phase === 'pre'){ S.phase = 'h1'; S.elapsed = 0; startClock(); }
+  else if (S.phase === 'ht'){ S.phase = 'h2'; S.elapsed = 0; startClock(); }
+  else if (S.phase === 'ft'){ newMatch(true); }
+  else S.running ? stopClock() : startClock();
+  draw(); save(); keepAwake();
+}
+
+function secondaryAction(){
+  stopClock();
+  S.phase = S.phase === 'h1' ? 'ht' : 'ft';
+  if (S.phase === 'ht'){ S.elapsed = 0; S.ticked = false; }
+  draw(); save();
+}
+
+function newMatch(keepTeams){
+  stopClock();
+  S = {
+    teams: keepTeams ? S.teams.map(t => ({...t, score:0}))
+                     : [{name:'Home',color:PALETTE[0],score:0},{name:'Away',color:PALETTE[1],score:0}],
+    phase:'pre', halfLength:S.halfLength, running:false, elapsed:0, startedAt:null, ticked:false, events:[]
+  };
+  draw(); save();
+}
+
+/* ── set the clock (keypad) ───────────── */
+let draftPhase = 'h1', buf = '', fresh = true;
+
+function openTime(){
+  draftPhase = (S.phase === 'h1' || S.phase === 'pre') ? 'h1' : 'h2';
+  const s = S.phase === 'pre' ? 0 : S.phase === 'ht' ? S.halfLength * 60 : shownSec();
+  buf = String(Math.min(99, Math.floor(s/60))).padStart(2,'0') + String(s%60).padStart(2,'0');
+  fresh = true;
+  drawTimeSheet();
+  $('timeSheet').hidden = false;
+}
+
+function bufSeconds(){
+  const d = buf.padStart(4,'0');
+  return Math.min(59, +d.slice(2)) + (+d.slice(0,2)) * 60;
+}
+
+function drawTimeSheet(){
+  $('halfChips').innerHTML = [['h1','First half'],['h2','Second half']].map(h =>
+    '<button class="chip" data-half="' + h[0] + '" aria-pressed="' + (draftPhase===h[0]) + '">' + h[1] + '</button>'
+  ).join('');
+  const d = buf.padStart(4,'0');
+  const r = $('readout');
+  r.firstChild.nodeValue = d.slice(0,2) + ':' + d.slice(2);
+  r.classList.toggle('fresh', fresh);
+  $('readNote').textContent = draftPhase === 'h2'
+    ? 'second half clock — runs on past ' + S.halfLength + ':00'
+    : 'minutes : seconds';
+}
+
+function press(d){
+  if (fresh){ buf = ''; fresh = false; }
+  if (buf.length < 4) buf += d;
+  drawTimeSheet();
+}
+
+function applyTime(){
+  S.phase = draftPhase;
+  const base = draftPhase === 'h2' ? S.halfLength * 60 : 0;
+  S.elapsed = Math.max(0, bufSeconds() - base) * 1000;
+  if (S.running) S.startedAt = Date.now();
+  $('timeSheet').hidden = true;
+  draw(); save();
+}
+
+/* ── setup sheet ──────────────────────── */
+function buildSheet(){
+  $('lenChips').innerHTML = [20,25,30,35,40,45].map(m =>
+    '<button class="chip" data-len="' + m + '" aria-pressed="' + (S.halfLength===m) + '">' + m + '</button>').join('');
+  [0,1].forEach(i => {
+    $('sw'+i).innerHTML = PALETTE.map(c =>
+      '<button class="sw" style="background:' + c + '" data-team="' + i + '" data-color="' + c +
+      '" aria-pressed="' + (S.teams[i].color===c) + '" aria-label="Kit colour"></button>').join('');
+  });
+}
+
+/* ── persistence ──────────────────────── */
+let saveTimer;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const json = JSON.stringify(S);
+    try {
+      if (window.storage) await window.storage.set(KEY, json);
+      else localStorage.setItem(KEY, json);
+    } catch(e){}
+  }, 250);
+}
+async function load(){
+  try {
+    let raw = null;
+    if (window.storage){ const r = await window.storage.get(KEY); raw = r && r.value; }
+    else raw = localStorage.getItem(KEY);
+    if (raw){ const p = JSON.parse(raw); if (p && p.teams && p.teams.length === 2) S = p; }
+  } catch(e){}
+  draw();
+}
+
+/* ── screen wake lock ─────────────────── */
+let lock = null;
+async function keepAwake(){
+  try {
+    if (S.running && !lock && 'wakeLock' in navigator){
+      lock = await navigator.wakeLock.request('screen');
+      lock.addEventListener('release', () => lock = null);
+    } else if (!S.running && lock){ lock.release(); lock = null; }
+  } catch(e){}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible'){ draw(); keepAwake(); }
+});
+
+/* ── wiring ───────────────────────────── */
+[0,1].forEach(i => {
+  $('side'+i).addEventListener('click', ev => {
+    if (ev.target.dataset.undo !== undefined){ removeLast(+ev.target.dataset.undo); return; }
+    if (ev.target.classList.contains('name')) return;
+    goal(i);
+  });
+  $('name'+i).addEventListener('click', ev => ev.stopPropagation());
+  $('name'+i).addEventListener('keydown', ev => { if (ev.key === 'Enter'){ ev.preventDefault(); ev.target.blur(); } });
+  $('name'+i).addEventListener('blur', ev => {
+    S.teams[i].name = ev.target.textContent.trim().slice(0,18) || (i ? 'Away' : 'Home');
+    draw(); save();
+  });
+});
+
+$('primary').addEventListener('click', primaryAction);
+$('secondary').addEventListener('click', secondaryAction);
+$('log').addEventListener('click', ev => {
+  const idx = ev.target.dataset.rm;
+  if (idx === undefined) return;
+  const e = S.events.splice(+idx,1)[0];
+  if (e && S.teams[e.team].score > 0) S.teams[e.team].score--;
+  draw(); save();
+});
+
+$('clock').addEventListener('click', openTime);
+$('timeCancel').addEventListener('click', () => $('timeSheet').hidden = true);
+$('timeApply').addEventListener('click', applyTime);
+$('timeSheet').addEventListener('click', ev => {
+  if (ev.target.id === 'timeSheet'){ $('timeSheet').hidden = true; return; }
+  const t = ev.target.closest('button'); if (!t) return;
+  if (t.dataset.d) press(t.dataset.d);
+  else if (t.dataset.act === 'clear'){ buf = ''; fresh = false; drawTimeSheet(); }
+  else if (t.dataset.act === 'back'){ if (fresh){ buf=''; fresh=false; } else buf = buf.slice(0,-1); drawTimeSheet(); }
+  else if (t.dataset.half){ draftPhase = t.dataset.half; drawTimeSheet(); }
+});
+
+$('setupBtn').addEventListener('click', () => { buildSheet(); $('sheet').hidden = false; });
+$('closeBtn').addEventListener('click', () => $('sheet').hidden = true);
+$('resetBtn').addEventListener('click', () => { newMatch(true); $('sheet').hidden = true; });
+$('sheet').addEventListener('click', ev => {
+  if (ev.target.id === 'sheet'){ $('sheet').hidden = true; return; }
+  const t = ev.target;
+  if (t.dataset.len){ S.halfLength = +t.dataset.len; buildSheet(); draw(); save(); }
+  if (t.dataset.color){ S.teams[+t.dataset.team].color = t.dataset.color; buildSheet(); draw(); save(); }
+});
+
+setInterval(() => { if (S.running) drawClock(); }, 250);
+load();
+
+if ('serviceWorker' in navigator && location.protocol === 'https:'){
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
